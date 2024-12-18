@@ -69,3 +69,145 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('index'))
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        query = request.form.get('search_query', '')
+        recipes = search_recipes(query)
+        return render_template('index.html', recipes=recipes, search_query=query)
+    
+    search_query = request.args.get('search_query', '')
+    decoded_search_query = unquote(search_query)
+    recipes = search_recipes(decoded_search_query)
+    return render_template('index.html', recipes=recipes, search_query=decoded_search_query)
+
+def search_recipes(query):
+    url = f'https://api.spoonacular.com/recipes/complexSearch'
+    params = {
+        'apiKey': API_KEY,
+        'query': query,
+        'number': 12,
+        'instructionsRequired': True,
+        'addRecipeInformation': True,
+        'fillIngredients': True,
+    }
+
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        return data['results']
+    return []
+
+
+@app.route('/recipe/<int:recipe_id>')
+def view_recipe(recipe_id):
+    search_query = request.args.get('search_query', '')
+    url = f'https://api.spoonacular.com/recipes/{recipe_id}/information'
+    params = {
+        'apiKey': API_KEY,
+    }
+
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        recipe = response.json()
+        return render_template('view_recipe.html', recipe=recipe, search_query=search_query)
+    return "Recipe not found", 404
+
+
+@app.route('/my_recipe/<int:recipe_id>')
+def view_my_recipe(recipe_id):
+    recipe = UserRecipe.query.filter_by(id=recipe_id).first()
+    return render_template('view_my_recipe.html', recipe=recipe)
+
+
+@app.route('/create_recipe', methods=['GET', 'POST'])
+@login_required
+def create_recipe():
+    form = RecipeForm()
+    if form.validate_on_submit():
+        recipe = UserRecipe(title=form.title.data, 
+                            ingredients=form.ingredients.data,
+                        instructions=form.instructions.data, 
+                        user_id=current_user.id
+                        )
+        db.session.add(recipe)
+        db.session.commit()
+        flash('Your recipe has been created!', 'success')
+        return redirect(url_for('index'))
+    return render_template('create_recipe.html', form=form)
+
+@app.route('/save_recipe/<int:recipe_id>')
+@login_required
+def save_recipe(recipe_id):
+    # Try to find the recipe in the local database first
+    recipe = Recipe.query.filter_by(id=recipe_id).first()
+
+    # If the recipe doesn't exist locally, retrieve it from Spoonacular
+    if not recipe:
+        url = f'https://api.spoonacular.com/recipes/{recipe_id}/information'
+        params = {'apiKey': API_KEY}
+        response = requests.get(url, params=params)
+
+        if response.status_code == 200:
+            recipe_data = response.json()
+            # Create a new recipe in the local database
+            recipe = Recipe(
+                id=recipe_data['id'],  
+                title=recipe_data['title'],
+                ingredients=', '.join([ingredient['name'] for ingredient in recipe_data['extendedIngredients']]),
+                instructions=recipe_data['instructions'],
+                user_id=current_user.id  # Associate with the current user
+            )
+            db.session.add(recipe)
+            db.session.commit()
+        else:
+            flash('Recipe not found in Spoonacular!', 'danger')
+            return redirect(url_for('index'))
+
+    # Check if the recipe has already been saved by the current user
+    if SavedRecipe.query.filter_by(user_id=current_user.id, recipe_id=recipe.id).first():
+        flash('You have already saved this recipe!', 'info')
+    else:
+        # Save the recipe if it is not already saved
+        saved_recipe = SavedRecipe(user_id=current_user.id, recipe_id=recipe.id)
+        db.session.add(saved_recipe)
+        db.session.commit()
+        flash('Recipe saved!', 'success')
+
+    return redirect(url_for('index'))
+
+
+@app.route('/delete_saved_recipe/<int:saved_recipe_id>', methods=['POST'])
+@login_required
+def delete_saved_recipe(saved_recipe_id):
+    # Find the SavedRecipe entry by ID
+    saved_recipe = SavedRecipe.query.get_or_404(saved_recipe_id)
+
+    # Ensure that the current user is the one who saved the recipe
+    if saved_recipe.user_id != current_user.id:
+        flash('You are not authorized to delete this saved recipe.', 'danger')
+        return redirect(url_for('saved_recipes'))
+    
+    db.session.delete(saved_recipe)
+    db.session.commit()
+
+    flash('Recipe removed from your saved list!', 'success')
+    return redirect(url_for('saved_recipes'))
+
+
+@app.route('/my_recipes')
+@login_required
+def my_recipes():
+    recipes = UserRecipe.query.filter_by(user_id=current_user.id).all()
+    return render_template('my_recipes.html', recipes=recipes)
+
+
+@app.route('/saved_recipes')
+@login_required
+def saved_recipes():
+    saved_recipes = SavedRecipe.query.filter_by(user_id=current_user.id).all()
+    return render_template('saved_recipes.html', saved_recipes=saved_recipes)
+
+if __name__ == '__main__':
+    app.run(debug=True)
