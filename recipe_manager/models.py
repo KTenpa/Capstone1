@@ -1,39 +1,39 @@
-import bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
-class User(db.Model, UserMixin):
-   id = db.Column(db.Integer, primary_key=True)
-   username = db.Column(db.String(150), nullable=False, unique=True)
-   password = db.Column(db.String(150), nullable=False)
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    recipes = db.relationship('Recipe', backref='author', lazy=True)
+    saved_recipes = db.relationship('SavedRecipe', backref='user', lazy=True)
 
-   def set_password(self, password):
-       """Hash the password before saving it to the database."""
-       self.password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
 
-   def check_password(self, password):
-       """Check if the given password matches the hashed password."""
-       return bcrypt.checkpw(password.encode('utf-8'), self.password.encode('utf-8'))
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 class Recipe(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(150), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
     ingredients = db.Column(db.Text, nullable=False)
     instructions = db.Column(db.Text, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    saved_by = db.relationship('SavedRecipe', backref='recipe', lazy=True)
 
-class Comment(db.Model):
+class UserRecipe(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id'))
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    content = db.Column(db.Text, nullable=False)
-    rating = db.Column(db.Integer)  # New rating field
-
-
-def connect_db(app):
-    """Connect this database to Flask app"""
-
-    db.app = app
-    db.init_app(app)
+    title = db.Column(db.String(100), nullable=False)
+    ingredients = db.Column(db.Text, nullable=False)
+    instructions = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+class SavedRecipe(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id'), nullable=False)
