@@ -27,3 +27,14 @@ class RegistrationForm(FlaskForm):
         strong_password])
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password', message="Passwords must match.")])
     submit = SubmitField('Sign Up')
+
+class LoginForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField('Login')
+
+class RecipeForm(FlaskForm):
+    title = StringField('Title', validators=[DataRequired()])
+    ingredients = TextAreaField('Ingredients', validators=[DataRequired()])
+    instructions = TextAreaField('Instructions', validators=[DataRequired()])
+    submit = SubmitField('Create Recipe')
