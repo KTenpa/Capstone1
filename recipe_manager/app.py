@@ -32,6 +32,14 @@ with app.app_context():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    """
+    - User registration route 
+    - Get request for registration form
+    - Sends a POST request when form is submitted
+    - Creates a new user in the database with form username and email inputs
+    - Hash and store the password
+    - Success message is shown and redirect to the homepage
+    """
     form = RegistrationForm()
     if form.validate_on_submit():
         try:
@@ -54,6 +62,13 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """
+    - User login route
+    - GET request renders the login form
+    - POST request checks the email and password for authentication
+    - If successful, logs the user in and redirects to homepage
+    - If authentication fails, shows an error message
+    """
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
@@ -67,11 +82,20 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
+    """
+    - User logout route
+    - Logs the user out of the application and redirects to homepage
+    """
     logout_user()
     return redirect(url_for('index'))
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    """
+    - Home route for searching and displaying recipes
+    - GET request displays recipes based on a search query from the URL
+    - POST request processes the user's search input, fetches recipes from Spoonacular, and displays the results
+    """
     if request.method == 'POST':
         query = request.form.get('search_query', '')
         recipes = search_recipes(query)
@@ -83,6 +107,11 @@ def index():
     return render_template('index.html', recipes=recipes, search_query=decoded_search_query)
 
 def search_recipes(query):
+    """
+    - Helper function to search for recipes from Spoonacular API
+    - Sends a GET request with the search query and returns a list of recipes
+    - If the request fails, returns an empty list
+    """
     url = f'https://api.spoonacular.com/recipes/complexSearch'
     params = {
         'apiKey': API_KEY,
@@ -102,6 +131,11 @@ def search_recipes(query):
 
 @app.route('/recipe/<int:recipe_id>')
 def view_recipe(recipe_id):
+    """
+    - Route for viewing a single recipe's details
+    - Fetches recipe data from Spoonacular API using the recipe's ID
+    - Displays the recipe details on the 'view_recipe.html' page
+    """
     search_query = request.args.get('search_query', '')
     url = f'https://api.spoonacular.com/recipes/{recipe_id}/information'
     params = {
@@ -117,6 +151,11 @@ def view_recipe(recipe_id):
 
 @app.route('/my_recipe/<int:recipe_id>')
 def view_my_recipe(recipe_id):
+    """
+    - Route to view a user's own recipe
+    - Fetches the recipe from the local database using the recipe's ID
+    - Displays the recipe on the 'view_my_recipe.html' page
+    """
     recipe = UserRecipe.query.filter_by(id=recipe_id).first()
     return render_template('view_my_recipe.html', recipe=recipe)
 
@@ -124,6 +163,12 @@ def view_my_recipe(recipe_id):
 @app.route('/create_recipe', methods=['GET', 'POST'])
 @login_required
 def create_recipe():
+    """
+    - Route for creating a new recipe
+    - GET request renders the recipe creation form
+    - POST request processes the form data to create a new recipe in the local database
+    - Success message is shown and redirects to the homepage after recipe creation
+    """
     form = RecipeForm()
     if form.validate_on_submit():
         recipe = UserRecipe(title=form.title.data, 
@@ -140,6 +185,12 @@ def create_recipe():
 @app.route('/save_recipe/<int:recipe_id>')
 @login_required
 def save_recipe(recipe_id):
+    """
+    - Route to save a recipe to the user's saved recipes list
+    - If the recipe isn't already in the local database, fetches it from Spoonacular and adds it
+    - Checks if the user has already saved the recipe, if not, adds it to their saved list
+    - Displays a success or info message accordingly
+    """
     # Try to find the recipe in the local database first
     recipe = Recipe.query.filter_by(id=recipe_id).first()
 
@@ -181,6 +232,11 @@ def save_recipe(recipe_id):
 @app.route('/delete_saved_recipe/<int:saved_recipe_id>', methods=['POST'])
 @login_required
 def delete_saved_recipe(saved_recipe_id):
+    """
+    - Route for deleting a saved recipe from the user's saved list
+    - Confirms that the user is the one who saved the recipe
+    - Removes the saved recipe from the database and shows a success message
+    """
     # Find the SavedRecipe entry by ID
     saved_recipe = SavedRecipe.query.get_or_404(saved_recipe_id)
 
@@ -199,6 +255,10 @@ def delete_saved_recipe(saved_recipe_id):
 @app.route('/my_recipes')
 @login_required
 def my_recipes():
+    """
+    - Route to display all recipes created by the logged-in user
+    - Fetches the user's recipes from the local database and displays them
+    """
     recipes = UserRecipe.query.filter_by(user_id=current_user.id).all()
     return render_template('my_recipes.html', recipes=recipes)
 
@@ -206,6 +266,10 @@ def my_recipes():
 @app.route('/saved_recipes')
 @login_required
 def saved_recipes():
+    """
+    - Route to display all saved recipes for the logged-in user
+    - Fetches all saved recipes from the database for the current user and displays them
+    """
     saved_recipes = SavedRecipe.query.filter_by(user_id=current_user.id).all()
     return render_template('saved_recipes.html', saved_recipes=saved_recipes)
 
